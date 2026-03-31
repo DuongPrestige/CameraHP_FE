@@ -30,9 +30,9 @@ export default function AdminLayout() {
           <div className="w-9 h-9 rounded-xl bg-primary flex items-center justify-center shadow-lg shadow-primary/20">
             <Camera className="w-5 h-5 text-slate-900" />
           </div>
-          <h1 className="text-xl font-bold tracking-wider text-white">V-SEC</h1>
+          <h1 className="text-xl font-bold tracking-wider text-white">HÒA PHÁT HD</h1>
         </div>
-        
+
         <nav className="flex-1 px-4 space-y-2">
           {menu.map((item) => {
             const Icon = item.icon;
@@ -43,8 +43,8 @@ export default function AdminLayout() {
                 to={item.path}
                 className={cn(
                   "flex items-center space-x-3 px-4 py-3 rounded-lg transition-all duration-200 group relative overflow-hidden",
-                  isActive 
-                    ? "text-white bg-slate-800 border border-slate-700/50" 
+                  isActive
+                    ? "text-white bg-slate-800 border border-slate-700/50"
                     : "text-slate-400 hover:text-white hover:bg-slate-800/50"
                 )}
               >
@@ -59,7 +59,7 @@ export default function AdminLayout() {
         </nav>
 
         <div className="p-4 border-t border-slate-700/50">
-          <button 
+          <button
             onClick={handleLogout}
             className="flex items-center space-x-3 text-slate-400 hover:text-danger w-full px-4 py-3 rounded-lg hover:bg-danger/10 transition-colors group"
           >
@@ -78,7 +78,7 @@ export default function AdminLayout() {
           <h2 className="text-2xl font-bold text-white tracking-tight">
             {menu.find(m => location.pathname.startsWith(m.path))?.name || 'Monitoring'}
           </h2>
-          
+
           <div className="flex items-center space-x-8">
             <button className="relative text-slate-400 hover:text-white transition-colors">
               <Bell className="w-6 h-6" />
@@ -104,7 +104,7 @@ export default function AdminLayout() {
         </header>
 
         <main className="flex-1 overflow-auto p-8 relative z-10">
-           <Outlet />
+          <Outlet />
         </main>
       </div>
     </div>

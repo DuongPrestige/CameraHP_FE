@@ -141,7 +141,7 @@ export default function Dashboard() {
 
   // Logic Lọc Dữ Liệu: Ổ Cứng Bị Lỗi được Bóc Tách Trực Tiếp Từ Đường Ống Incident Của Backend!
   const badHddList = incidents.filter(ticket =>
-    ticket.error_type?.toUpperCase().includes('HDD') || 
+    ticket.error_type?.toUpperCase().includes('HDD') ||
     ticket.error_type?.toUpperCase().includes('STORAGE')
   );
 
@@ -154,13 +154,13 @@ export default function Dashboard() {
       <div className="mb-4">
         <h1 className="text-3xl font-black tracking-tight mb-0.5 flex items-center font-mono">
           <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-primary drop-shadow-md">
-            TỔNG TRẠM V-SEC DASHBOARD
+            HỆ THỐNG THEO DÕI THIẾT BỊ ĐẦU GHI - CAMERA
           </span>
           <span className="ml-4 text-[10px] font-bold tracking-widest bg-emerald-500/10 text-emerald-400 px-3 py-1.5 rounded-full border border-emerald-500/30 flex items-center shadow-[0_0_15px_rgba(16,185,129,0.3)]">
             <span className="w-2 h-2 rounded-full bg-emerald-500 mr-2 animate-pulse"></span> SOCKET LIVE
           </span>
         </h1>
-        <p className="text-slate-400 text-sm font-medium border-l-2 border-primary/50 pl-3">Sở Chỉ Huy Thời Gian Thực - Mọi thiết bị trên Lưới đều đang được giám sát.</p>
+        <p className="text-slate-400 text-sm font-medium border-l-2 border-primary/50 pl-3">Mọi thiết bị trên Lưới đều đang được giám sát.</p>
       </div>
 
       {/* KPI CARDS KHỐI 1 (5 ITEM) */}
@@ -265,26 +265,40 @@ export default function Dashboard() {
               </div>
             ) : (
               <ul className="space-y-3">
-                {videoLossList.map(item => (
-                  <li 
-                    key={item.id} 
-                    onClick={() => (item.device?.id || item.device_id) && navigate(`/devices/${item.device?.id || item.device_id}`)}
-                    className="bg-slate-800/50 p-3 rounded-xl border border-amber-500/30 shadow-md relative overflow-hidden cursor-pointer hover:bg-slate-700/50 transition-colors group"
-                  >
-                    <div className="absolute left-0 top-0 bottom-0 w-1 bg-amber-500 shadow-[0_0_15px_rgba(245,158,11,0.8)]"></div>
-                    <div className="flex justify-between items-start pl-2">
-                      <div>
-                        <span className="text-[9px] bg-amber-500/20 text-amber-400 border border-amber-500/30 px-2 py-0.5 rounded uppercase font-black tracking-widest mr-2">
-                          {item.error_type}
-                        </span>
-                        <p className="text-xs text-slate-300 mt-2 font-medium">Đầu ghi Mẹ:</p>
-                        <p className="font-mono text-white tracking-widest text-sm bg-slate-900 px-2 py-1 rounded inline-block border border-slate-700 mt-1">
-                          {item.device?.ip_address || item.device_id || 'UNKNOWN-IP'}
-                        </p>
+                {videoLossList.map(item => {
+                  const isProcessing = item.status?.toUpperCase() === 'PROCESSING';
+                  const cardColor = isProcessing ? 'border-amber-500/50 bg-amber-900/10' : 'border-red-500/30 bg-slate-800/50';
+                  const stripeColor = isProcessing ? 'bg-amber-500 shadow-[0_0_15px_rgba(245,158,11,0.8)]' : 'bg-red-500 shadow-[0_0_15px_rgba(239,68,68,0.8)]';
+                  const badgeColor = isProcessing ? 'bg-amber-500/20 text-amber-400 border-amber-500/30' : 'bg-red-500/20 text-red-400 border-red-500/30';
+
+                  return (
+                    <li
+                      key={item.id}
+                      onClick={() => (item.device?.id || item.device_id) && navigate(`/devices/${item.device?.id || item.device_id}`)}
+                      className={`p-3 rounded-xl border shadow-md relative overflow-hidden cursor-pointer hover:bg-slate-700/50 transition-colors group ${cardColor}`}
+                    >
+                      <div className={`absolute left-0 top-0 bottom-0 w-1 ${stripeColor}`}></div>
+                      <div className="flex justify-between items-start pl-2">
+                        <div className="w-full">
+                          <div className="flex justify-between items-center w-full">
+                            <span className={`text-[9px] px-2 py-0.5 rounded border uppercase font-black tracking-widest mr-2 ${badgeColor}`}>
+                              {item.error_type}
+                            </span>
+                            {isProcessing && (
+                              <span className="text-[9px] bg-amber-500/10 text-amber-400 border border-amber-500/20 px-2 py-0.5 rounded uppercase font-black tracking-widest flex items-center shrink-0">
+                                🛠 ĐANG SỬA BỞI {item.technician?.full_name?.split(' ').pop() || 'KTV'}
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-xs text-slate-300 mt-2 font-medium">Đầu ghi Mẹ:</p>
+                          <p className="font-mono text-white tracking-widest text-sm bg-slate-900 px-2 py-1 rounded inline-block border border-slate-700 mt-1">
+                            {item.device?.ip_address || item.device_id || 'UNKNOWN-IP'}
+                          </p>
+                        </div>
                       </div>
-                    </div>
-                  </li>
-                ))}
+                    </li>
+                  )
+                })}
               </ul>
             )}
           </div>
@@ -295,7 +309,7 @@ export default function Dashboard() {
           <div className={`p-4 px-6 border-b flex items-center justify-between ${badHddList.length > 0 ? 'bg-red-500/20 border-red-500/40' : 'bg-emerald-500/10 border-emerald-500/20'}`}>
             <div className="flex items-center">
               <Database className={`w-5 h-5 mr-3 ${badHddList.length > 0 ? 'text-red-400 animate-pulse' : 'text-emerald-400'}`} />
-              <h3 className={`text-[14px] font-black uppercase tracking-widest drop-shadow-md ${badHddList.length > 0 ? 'text-red-400' : 'text-emerald-400'}`}>Sức Khỏe Ổ Cứng Toàn Tập</h3>
+              <h3 className={`text-[14px] font-black uppercase tracking-widest drop-shadow-md ${badHddList.length > 0 ? 'text-red-400' : 'text-emerald-400'}`}>Sức Khỏe Ổ Cứng</h3>
             </div>
             {badHddList.length === 0 && <CheckCircle className="w-6 h-6 text-emerald-400" />}
           </div>
@@ -342,7 +356,7 @@ export default function Dashboard() {
         {/* CỘT 3 (3 Phần): BIỂU ĐỒ PIE CHART */}
         <div className="xl:col-span-3 glass p-6 rounded-3xl border border-slate-700/60 flex flex-col shadow-2xl relative overflow-hidden bg-slate-900/40 min-h-[380px]">
           <h3 className="text-[12px] font-black mb-4 flex items-center text-slate-300 uppercase tracking-widest text-center justify-center">
-            Biểu Đồ Trạng Thái Tổng
+            Biểu Đồ Trạng Thái Sự Cố
           </h3>
           <div className="flex-1 w-full flex items-center justify-center relative my-2">
             {(stats.tickets_pending === 0 && stats.tickets_resolved === 0 && stats.tickets_processing === 0) ? (

@@ -17,7 +17,7 @@ export default function Login() {
     }
 
     toast.loading('Đang xác thực bảo mật...', { id: 'login-toast' });
-    
+
     // Gọi Zustand action (Kết nối API)
     const { success, error } = await login(username, password);
 
@@ -34,11 +34,11 @@ export default function Login() {
       {/* Decorative background blurs */}
       <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-primary/20 rounded-full blur-[120px]" />
       <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-danger/20 rounded-full blur-[120px]" />
-      
+
       <div className="glass w-full max-w-md p-8 rounded-2xl z-10 animate-fade-in-up">
         <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold text-white mb-2 tracking-tight">V-Sec NVR Access</h1>
-          <p className="text-slate-400 text-sm">Enter your operator credentials to monitor</p>
+          <h1 className="text-3xl font-bold text-white mb-2 tracking-tight">GIÁM SÁT THIẾT BỊ ĐẦU GHI - CAMERA</h1>
+          <p className="text-slate-400 text-sm">PHÒNG CNTT & CĐS</p>
         </div>
 
         <form onSubmit={handleLogin} className="space-y-5">
@@ -68,7 +68,7 @@ export default function Login() {
             type="submit"
             className="w-full bg-primary hover:bg-primary/90 text-slate-900 font-semibold py-2.5 rounded-lg transition-colors mt-4"
           >
-            Authenticate
+            ĐĂNG NHẬP
           </button>
         </form>
       </div>

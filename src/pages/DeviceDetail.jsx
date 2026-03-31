@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { ArrowLeft, Server, HardDrive, Cpu, Activity, AlertCircle, Clock, BadgeInfo, Camera as CameraIcon, AlertTriangle, CheckCircle, Info, EthernetPort, Plug } from 'lucide-react';
+import { ArrowLeft, Server, HardDrive, Cpu, Activity, AlertCircle, Clock, BadgeInfo, Camera as CameraIcon, AlertTriangle, CheckCircle, Info, EthernetPort, Plug, RefreshCw, Search } from 'lucide-react';
 import { api } from '../services/api';
+import toast from 'react-hot-toast';
+import { io } from 'socket.io-client';
 import CameraDetailsModal from '../components/CameraDetailsModal';
 
 // Circle Progress Component Mini
@@ -52,6 +54,72 @@ export default function DeviceDetail() {
   // Focus Modal Mắt Thần
   const [selectedCamera, setSelectedCamera] = useState(null);
 
+  // Nút Khám Bệnh Nhanh Lazy Healing
+  const [isHealthChecking, setIsHealthChecking] = useState(false);
+
+  const handleHealthCheck = async () => {
+    if (isHealthChecking) return;
+    setIsHealthChecking(true);
+    try {
+      const res = await api.post(`/devices/${id}/health-check`);
+      
+      if (res.data?.resolved_count > 0) {
+        toast.success(res.data?.message || `Tái Khám Sức Khỏe Lệnh ISAPI Thắng Lợi. Trắng Cấp Cứu Mướt Tay Đi Tổng ${res.data.resolved_count} Vé Oan!`);
+      } else {
+        toast.success('Máy Thiết Bị An Toàn Kín Mạng Hoàn Hảo!', { icon: '⚕️' });
+      }
+
+      // Đắp đè data trực diện - Ko Xả API GET
+      if (res.data?.data) {
+        setDevice(res.data.data);
+        if (res.data.data.incidents !== undefined) {
+           setIncidents(res.data.data.incidents);
+        } else {
+           setIncidents([]);
+        }
+      }
+
+    } catch (e) {
+      toast.error(e.response?.data?.message || 'Lỗi kết nối khi cố tái khám bệnh cho NVR.');
+    } finally {
+      setIsHealthChecking(false);
+    }
+  };
+
+  // Nút Sync Áp Thuật
+  const [syncing, setSyncing] = useState(false);
+
+  const handleSyncCameras = async () => {
+    if (syncing) return;
+    setSyncing(true);
+    const loadingToast = toast.loading('Đang ép trạm NVR đồng bộ Cấu Trúc Lõi và Thuật Toán Ổ Cứng (Mất 1-3s)...');
+    try {
+      const res = await api.post(`/devices/${id}/sync-cameras`);
+      toast.success(res.data?.message || 'Đồng bộ Lõi NVR và Storage thành công! Đã tự động rà soát & dập các Án Oan (Mạng/HDD)!', { id: loadingToast });
+      
+      // 1. Dùng trực tiếp Data trả về từ All-In-One API, Dẹp bỏ GET request tốn Pin!
+      if (res.data?.data) {
+        setDevice(res.data.data);
+        // Backend đã tiệt trùng và trả về mảng incidents Sạch bóc
+        if (res.data.data.incidents !== undefined) {
+           setIncidents(res.data.data.incidents);
+        } else {
+           setIncidents([]);
+        }
+      }
+      
+      // 2. Dọi dữ liệu Ổ Cứng Mới Update Chui Mảng Lưới React (Thay thế Chart Gấu Cũ)
+      if (res.data?.hdds !== undefined) {
+        setHddData(res.data.hdds);
+      }
+
+    } catch (e) {
+      toast.error(e.response?.data?.message || 'Gãy kết nối khi đang ép đồng bộ NVR.', { id: loadingToast });
+    } finally {
+      setSyncing(false);
+    }
+  };
+
   useEffect(() => {
     window.scrollTo(0, 0); // Reset cuộn khi mới vào trang
 
@@ -85,6 +153,20 @@ export default function DeviceDetail() {
       .catch(() => setIncidents([]))
       .finally(() => setLoadingIncidents(false));
 
+    // 6. Lắng nghe WebSocket
+    const socketUrl = import.meta.env.VITE_API_URL?.replace('/api', '') || 'http://localhost:5000';
+    const socket = io(socketUrl, {
+      auth: { token: localStorage.getItem('token') || '' },
+      transports: ['websocket', 'polling']
+    });
+
+    socket.on('incident_updated', () => {
+      // Khi có hành vi KTV nhận vé phạt ở bên ngoài, hoặc Hệ thống Auto-Resolve tự dập vé
+      // Dây truyền tự kích Fetching dập lỗi trên Màn này luôn!
+      api.get(`/incidents?device_id=${id}`).then(res => setIncidents(res.data?.data || res.data || []));
+    });
+
+    return () => socket.disconnect();
   }, [id]);
 
   if (loadingDevice) {
@@ -113,31 +195,63 @@ export default function DeviceDetail() {
   return (
     <div className="text-white flex flex-col h-full animate-fade-in-up space-y-6">
 
-      {/* HEADER NAV */}
-      <div className="flex items-center space-x-4">
-        <button onClick={() => navigate('/devices')} className="p-2.5 bg-slate-800/80 hover:bg-slate-700/80 border border-slate-700 rounded-xl text-slate-300 transition-all shadow-md group">
-          <ArrowLeft className="w-5 h-5 group-hover:-translate-x-1 transition-transform" />
-        </button>
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight mb-1 text-slate-100 drop-shadow-md flex items-center">
-            <span className="font-mono text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-primary font-black tracking-wider mr-4">
-              NVR :: {device.ip_address}
-            </span>
-            {isOnline ? (
-              <span className="text-[10px] font-mono tracking-widest bg-green-500/10 text-green-400 px-3 py-1.5 rounded-lg border border-green-500/20 shadow-[0_0_10px_rgba(16,185,129,0.2)] flex items-center">
-                <div className="w-2h h-2 bg-green-500 rounded-full mr-2 animate-pulse"></div> SIGNAL ONLINE
+      {/* HEADER NAV CHỮA LỖI & ĐỒNG BỘ */}
+      <div className="flex flex-col sm:flex-row sm:justify-between items-start sm:items-center space-y-4 sm:space-y-0">
+        <div className="flex items-center space-x-4">
+          <button onClick={() => navigate('/devices')} className="p-2.5 bg-slate-800/80 hover:bg-slate-700/80 border border-slate-700 rounded-xl text-slate-300 transition-all shadow-md group">
+            <ArrowLeft className="w-5 h-5 group-hover:-translate-x-1 transition-transform" />
+          </button>
+          <div>
+            <h1 className="text-3xl font-bold tracking-tight mb-1 text-slate-100 drop-shadow-md flex items-center">
+              <span className="font-mono text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-primary font-black tracking-wider mr-4">
+                NVR :: {device.ip_address}
               </span>
+              {isOnline ? (
+                <span className="text-[10px] font-mono tracking-widest bg-green-500/10 text-green-400 px-3 py-1.5 rounded-lg border border-green-500/20 shadow-[0_0_10px_rgba(16,185,129,0.2)] flex items-center">
+                  <div className="w-2 h-2 bg-green-500 rounded-full mr-2 animate-pulse"></div> SIGNAL ONLINE
+                </span>
+              ) : (
+                <span className="text-[10px] font-mono tracking-widest bg-red-500/10 text-red-400 px-3 py-1.5 rounded-lg border border-red-500/20 flex items-center">
+                  <div className="w-2 h-2 bg-red-500 rounded-full mr-2"></div> OFFLINE / TIMEOUT
+                </span>
+              )}
+            </h1>
+            <p className="text-slate-400 text-sm flex items-center gap-3">
+              <span className="flex items-center"><Server className="w-3.5 h-3.5 mr-1" /> {device?.username?.toUpperCase() || 'HIKVISION'}</span>
+              <span className="text-slate-700">|</span>
+              <span className="flex items-center">Vị trí Lắp Lõi: <strong className="text-white ml-2">{device?.location?.name || 'Trôi Nổi Không Lưu'}</strong></span>
+            </p>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-3 shrink-0 flex-wrap sm:flex-nowrap justify-end">
+          {/* Nút Tái Khám (Health Check) */}
+          <button
+            onClick={handleHealthCheck}
+            disabled={isHealthChecking}
+            className="flex items-center bg-emerald-500/10 hover:bg-emerald-500/30 text-emerald-400 border border-emerald-500/40 px-5 py-2.5 rounded-xl font-bold text-[10px] tracking-widest uppercase transition-all shadow-[0_0_15px_rgba(16,185,129,0.15)] disabled:opacity-50 disabled:cursor-not-allowed group"
+          >
+            {isHealthChecking ? (
+              <div className="w-4 h-4 border-2 border-emerald-400 border-t-transparent flex items-center justify-center rounded-full animate-spin mr-2"></div>
             ) : (
-              <span className="text-[10px] font-mono tracking-widest bg-red-500/10 text-red-400 px-3 py-1.5 rounded-lg border border-red-500/20 flex items-center">
-                <div className="w-2 h-2 bg-red-500 rounded-full mr-2"></div> OFFLINE / TIMEOUT
-              </span>
+              <Search className="w-4 h-4 mr-2 group-hover:scale-110 transition-transform duration-300" />
             )}
-          </h1>
-          <p className="text-slate-400 text-sm flex items-center gap-3">
-            <span className="flex items-center"><Server className="w-3.5 h-3.5 mr-1" /> {device?.username?.toUpperCase() || 'HIKVISION'}</span>
-            <span className="text-slate-700">|</span>
-            <span className="flex items-center">Vị trí Lắp Lõi: <strong className="text-white ml-2">{device?.location?.name || 'Trôi Nổi Không Lưu'}</strong></span>
-          </p>
+            {isHealthChecking ? 'ĐANG KHÁM TỔNG QUÁT...' : 'TÁI KHÁM SỨC KHỎE'}
+          </button>
+
+          {/* Nút Phép Thuật: ĐỒNG BỘ NVR */}
+          <button 
+             onClick={handleSyncCameras} 
+             disabled={syncing}
+             className="flex items-center bg-blue-500/10 hover:bg-blue-600/30 text-blue-400 border border-blue-500/40 px-5 py-2.5 rounded-xl font-bold text-[10px] tracking-widest uppercase transition-all shadow-[0_0_15px_rgba(59,130,246,0.15)] disabled:opacity-50 disabled:cursor-not-allowed group shrink-0"
+          >
+             {syncing ? (
+               <div className="w-4 h-4 border-2 border-blue-400 border-t-transparent flex items-center justify-center rounded-full animate-spin mr-2"></div>
+             ) : (
+               <RefreshCw className="w-4 h-4 mr-2 group-hover:rotate-180 transition-transform duration-500" />
+             )}
+             {syncing ? 'ĐANG ÉP ĐỒNG BỘ...' : 'ĐỒNG BỘ NVR'}
+          </button>
         </div>
       </div>
 
@@ -326,12 +440,17 @@ export default function DeviceDetail() {
               </div>
             ) : (
               incidents.map((incident, idx) => (
-                <div key={idx} className="p-4 bg-red-500/10 rounded-xl border border-red-500/20 hover:border-red-500/50 hover:bg-red-500/20 transition-colors shadow-[0_4px_10px_rgba(0,0,0,0.2)]">
+                <div 
+                  key={idx} 
+                  onClick={() => navigate(`/incidents?status=${(incident.status || 'PENDING').toLowerCase()}`)}
+                  className="p-4 bg-red-500/10 rounded-xl border border-red-500/20 hover:border-red-500/50 hover:bg-red-500/20 transition-all shadow-[0_4px_10px_rgba(0,0,0,0.2)] cursor-pointer group"
+                  title="Nhấn để đi đến Bảng Quản Lý Sự Cố (Kanban)"
+                >
                   <div className="flex justify-between items-center mb-2.5">
                     <span className="text-[10px] font-black uppercase text-red-300 bg-red-500/20 px-2 py-0.5 rounded shadow-sm">
                       {incident.status || 'PENDING ALERT'}
                     </span>
-                    <span className="text-[10px] font-mono text-slate-400 opacity-80">{new Date(incident.created_at || Date.now()).toLocaleDateString()}</span>
+                    <span className="text-[10px] font-mono text-slate-400 opacity-80 group-hover:text-red-300 transition-colors">{new Date(incident.created_at || Date.now()).toLocaleDateString()}</span>
                   </div>
                   <p className="text-sm text-slate-200 line-clamp-3 leading-relaxed font-medium">
                     {incident.error_type || 'Ghi nhận đứt tín hiệu Video Loss ở Mắt lẻ hoặc quá tải Memory.'}

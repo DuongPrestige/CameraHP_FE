@@ -4,23 +4,35 @@ import useAuthStore from '../stores/authStore';
 import {
    AlertTriangle, CheckCircle, Search, Filter, Plus,
    User, Clock, Play, Check, X, Server, Camera, ShieldAlert,
-   ChevronLeft, ChevronRight, MessageSquare
+   ChevronLeft, ChevronRight, MessageSquare, ExternalLink
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { io } from 'socket.io-client';
+import { useNavigate, useLocation } from 'react-router-dom';
 
 export default function Incidents() {
    const user = useAuthStore(state => state.user);
+   const navigate = useNavigate();
+   const location = useLocation();
    const [incidents, setIncidents] = useState([]);
    const [loading, setLoading] = useState(true);
 
    // Pagination & Filters
    const [page, setPage] = useState(1);
    const [totalPages, setTotalPages] = useState(1);
-   const [statusFilter, setStatusFilter] = useState(''); // Rỗng = All
+   
+   // Đọc Trạng Thái Status Từ Đường Dẫn URL (Mặc định PENDING)
+   const [statusFilter, setStatusFilter] = useState(() => {
+     const params = new URLSearchParams(window.location.search);
+     return params.get('status') || 'pending';
+   });
+   
+   const [tabCounts, setTabCounts] = useState({ pending: 0, processing: 0, resolved: 0 });
 
-   // Trạng thái nhập Note cho từng vé
-   const [resolveNotes, setResolveNotes] = useState({});
+   // Trạng thái Form Đóng Vé (Modal Resolve Kanban)
+   const [resolveModalOpen, setResolveModalOpen] = useState(false);
+   const [resolvingTicketId, setResolvingTicketId] = useState(null);
+   const [resolveNoteText, setResolveNoteText] = useState('');
 
    // Form Modal Tạo Lỗi Thủ Công
    const [isModalOpen, setIsModalOpen] = useState(false);
@@ -29,20 +41,34 @@ export default function Incidents() {
    const [cameras, setCameras] = useState([]);
    const [formData, setFormData] = useState({ device_id: '', camera_id: '', error_type: '' });
 
-   // 1. GÕ CỬA BACKEND LẤY DANH SÁCH VÉ LỖI
+   // 1. GÕ CỬA BACKEND LẤY DANH SÁCH VÉ LỖI VÀ ĐẾM SỐ LƯỢNG KANBAN
    const fetchIncidents = async () => {
       try {
          setLoading(true);
          let query = `/incidents?page=${page}&limit=12`;
          if (statusFilter) query += `&status=${statusFilter}`;
 
-         const res = await api.get(query);
+         const [res, statsRes] = await Promise.all([
+            api.get(query),
+            api.get('/stats/dashboard').catch(() => null)
+         ]);
+
          const dataArray = res.data?.data || res.data || [];
          setIncidents(dataArray);
 
          // Lấy thẻ phân trang (Có thể meta, pagination, hoặc total_pages)
          const meta = res.data?.meta || res.data?.pagination || {};
          setTotalPages(meta.last_page || meta.total_pages || 1);
+
+         // Cập nhật số đếm trên 3 Tabs
+         if (statsRes) {
+            const inc = statsRes.data?.data?.incidents || statsRes.data?.incidents || {};
+            setTabCounts({
+               pending: Number(inc.pending) || 0,
+               processing: Number(inc.processing) || 0,
+               resolved: Number(inc.resolved) || 0
+            });
+         }
 
       } catch (e) {
          toast.error('Gãy kết nối khi tải Bảng Vé Lỗi');
@@ -63,6 +89,15 @@ export default function Incidents() {
       } catch (e) { }
    };
 
+   // Lắng nghe thay đổi URL nếu user click Link điều hướng khác vào page này
+   useEffect(() => {
+      const params = new URLSearchParams(location.search);
+      const urlStatus = params.get('status');
+      if (urlStatus && ['pending', 'processing', 'resolved'].includes(urlStatus)) {
+         setStatusFilter(urlStatus);
+      }
+   }, [location.search]);
+
    // Lắng nghe WebSockets Y hệt Dashboard
    useEffect(() => {
       const socketUrl = import.meta.env.VITE_API_URL?.replace('/api', '') || 'http://localhost:5000';
@@ -72,6 +107,21 @@ export default function Incidents() {
       });
 
       socket.on('incident_updated', (payload) => {
+         if (payload?.message) {
+            toast.success(payload.message, { 
+               duration: 6000, 
+               position: 'bottom-right',
+               icon: '🤖',
+               style: {
+                  borderRadius: '10px',
+                  background: 'rgba(30, 41, 59, 0.95)',
+                  color: '#4ade80',
+                  border: '1px solid rgba(74, 222, 128, 0.3)',
+                  backdropFilter: 'blur(8px)',
+                  boxShadow: '0 4px 30px rgba(74, 222, 128, 0.15)'
+               }
+            });
+         }
          fetchIncidents();
       });
 
@@ -97,24 +147,31 @@ export default function Incidents() {
    }, []);
 
    // 2. NGHIỆP VỤ JIRA: GẮP CHUYỂN TRẠNG THÁI VÉ
-   const handleTicketingWorkflow = async (id, newStatus) => {
+   const handleTicketingWorkflow = async (id, newStatus, note = '') => {
       try {
          // Ép Chữ IN HOA để khớp với Strict Enum MySQL ở Backend
          const body = { status: newStatus.toUpperCase() };
          if (newStatus === 'resolved') {
-            body.resolve_note = resolveNotes[id] || 'Đã sửa lụi hoàn tất không lưu lại vết tích.';
+            body.resolve_note = note || 'Kiểm tra và khắc phục lỗi thực địa thành công.';
          }
 
          await api.put(`/incidents/${id}`, body);
          toast.success(`Vé #${id} chuyển sang ${newStatus.toUpperCase()}!`, { icon: newStatus === 'resolved' ? '✅' : '🛠️' });
 
-         // Xóa Note tạm nếu có
+         // Xóa Note tạm nếu đóng ticket
          if (newStatus === 'resolved') {
-            setResolveNotes(prev => ({ ...prev, [id]: '' }));
+            setResolveModalOpen(false);
+            setResolvingTicketId(null);
+            setResolveNoteText('');
          }
          fetchIncidents();
       } catch (e) {
-         toast.error(`Từ Chối Thao Tác: ${e.response?.data?.message || 'Lỗi Phân Quyền/Máy Chủ'}`);
+         if (e.response?.status === 403) {
+            toast.error('❌ CẢNH BÁO TỐI CAO: Vé này đã bị KTV khác giành! Đừng tham việc của người ta!', { duration: 5000 });
+            fetchIncidents();
+         } else {
+            toast.error(`Từ Chối Thao Tác: ${e.response?.data?.message || 'Lỗi Phân Quyền/Máy Chủ'}`);
+         }
       }
    };
 
@@ -162,19 +219,20 @@ export default function Incidents() {
             </div>
 
             <div className="flex flex-col sm:flex-row gap-3">
-               {/* Bộ Lọc (Jira Filters) */}
-               <div className="relative flex items-center bg-slate-900 border border-slate-700 rounded-xl px-1">
-                  <Filter className="w-4 h-4 text-slate-400 ml-3" />
-                  <select
-                     className="bg-transparent text-sm text-slate-200 outline-none pl-2 pr-6 py-2.5 appearance-none cursor-pointer font-bold tracking-wider"
-                     value={statusFilter}
-                     onChange={(e) => { setStatusFilter(e.target.value); setPage(1); }}
-                  >
-                     <option className="bg-slate-900" value="">🌍 LƯỚI TỔNG (ALL TICKETS)</option>
-                     <option className="bg-slate-900 text-red-400" value="pending">🔥 CẤP BÁCH (PENDING)</option>
-                     <option className="bg-slate-900 text-amber-400" value="processing">🛠 ĐANG SỬA (PROCESSING)</option>
-                     <option className="bg-slate-900 text-green-400" value="resolved">✅ ĐÃ XONG (RESOLVED)</option>
-                  </select>
+               {/* Bộ Lọc (Jira Filters -> Kanban Tabs) */}
+               <div className="flex bg-slate-900/80 p-1.5 rounded-xl border border-slate-700 shadow-inner overflow-x-auto custom-scrollbar">
+                  <button onClick={() => { setStatusFilter('pending'); setPage(1); }} className={`relative px-5 py-2.5 flex items-center justify-center rounded-lg text-xs font-black tracking-widest uppercase transition-all whitespace-nowrap ${statusFilter === 'pending' ? 'bg-red-500/20 text-red-500 border border-red-500/50 shadow-[0_0_15px_rgba(239,68,68,0.2)]' : 'text-slate-500 hover:text-red-400 hover:bg-red-500/10'}`}>
+                    🔥 PENDING
+                    {tabCounts.pending > 0 && <span className="ml-2 bg-red-500 text-white text-[10px] px-2 py-0.5 rounded-full">{tabCounts.pending}</span>}
+                  </button>
+                  <button onClick={() => { setStatusFilter('processing'); setPage(1); }} className={`relative px-5 py-2.5 flex items-center justify-center rounded-lg text-xs font-black tracking-widest uppercase transition-all whitespace-nowrap mx-1 ${statusFilter === 'processing' ? 'bg-amber-500/20 text-amber-500 border border-amber-500/50 shadow-[0_0_15px_rgba(245,158,11,0.2)]' : 'text-slate-500 hover:text-amber-400 hover:bg-amber-500/10'}`}>
+                    🛠 PROCESSING
+                    {tabCounts.processing > 0 && <span className="ml-2 bg-amber-500 text-white text-[10px] px-2 py-0.5 rounded-full">{tabCounts.processing}</span>}
+                  </button>
+                  <button onClick={() => { setStatusFilter('resolved'); setPage(1); }} className={`relative px-5 py-2.5 flex items-center justify-center rounded-lg text-xs font-black tracking-widest uppercase transition-all whitespace-nowrap ${statusFilter === 'resolved' ? 'bg-green-500/20 text-green-500 border border-green-500/50 shadow-[0_0_15px_rgba(34,197,94,0.2)]' : 'text-slate-500 hover:text-green-400 hover:bg-green-500/10'}`}>
+                    ✅ RESOLVED
+                    {tabCounts.resolved > 0 && <span className="ml-2 bg-green-500 text-white text-[10px] px-2 py-0.5 rounded-full">{tabCounts.resolved}</span>}
+                  </button>
                </div>
 
                {/* Nút Tạo Lỗi Menu */}
@@ -232,10 +290,18 @@ export default function Incidents() {
                            <div className="space-y-3 bg-slate-950/30 p-4 rounded-xl border border-slate-800/80">
                               <div className="flex items-start">
                                  <Server className="w-4 h-4 text-slate-500 mr-3 mt-0.5" />
-                                 <div className="text-sm text-slate-300">
+                                 <div className="text-sm text-slate-300 flex-1">
                                     <p className="text-[11px] font-bold text-slate-500 uppercase">Trạm Tòa Nhà Điều Phối</p>
-                                    <p className="font-mono font-black mt-0.5">{ticket.device?.ip_address || `Thiết bị IP Bí Ẩn (ID: ${ticket.device_id})`}</p>
-                                    <p className="text-xs text-slate-400">{ticket.device?.location?.name || ''}</p>
+                                    <div className="flex items-center justify-between mt-0.5 gap-2">
+                                       <p className="font-mono font-black">{ticket.device?.ip_address || `Thiết bị IP Bí Ẩn (ID: ${ticket.device_id})`}</p>
+                                       <button 
+                                          onClick={() => navigate(`/devices/${ticket.device_id || ticket.device?.id}`)} 
+                                          className="flex items-center text-[10px] bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 px-3 py-1.5 rounded-lg border border-blue-500/30 transition-all font-bold tracking-widest shrink-0"
+                                       >
+                                          <ExternalLink className="w-3 h-3 justify-center mr-1.5" /> MỞ MÁY CHỦ
+                                       </button>
+                                    </div>
+                                    <p className="text-xs text-slate-400 mt-1">{ticket.device?.location?.name || ''}</p>
                                  </div>
                               </div>
 
@@ -271,19 +337,12 @@ export default function Incidents() {
                         )}
 
                         {sts === 'processing' && isMyJob && (
-                           <div className="p-4 bg-amber-500/5 border-t border-amber-500/10 flex flex-col sm:flex-row gap-3">
-                              <input
-                                 type="text"
-                                 placeholder="Nhập Log Nhật ký ghi chú khắc phục (Eg: Nối dây điện chuột cắn)..."
-                                 className="flex-1 bg-slate-900 border border-slate-700/80 rounded-lg outline-none px-3 py-2 text-sm text-slate-300 placeholder:text-slate-600 focus:border-amber-500/50"
-                                 value={resolveNotes[ticket.id] || ''}
-                                 onChange={(e) => setResolveNotes({ ...resolveNotes, [ticket.id]: e.target.value })}
-                              />
+                           <div className="p-4 bg-amber-500/5 border-t border-amber-500/10 flex justify-end gap-3">
                               <button
-                                 onClick={() => handleTicketingWorkflow(ticket.id, 'resolved')}
-                                 className="flex items-center justify-center shrink-0 text-xs font-black tracking-widest uppercase bg-amber-500/20 hover:bg-green-500 text-amber-500 hover:text-white px-5 py-2.5 rounded-lg border border-amber-500/40 hover:border-green-500 transition-colors shadow-lg group/btn"
+                                 onClick={() => { setResolvingTicketId(ticket.id); setResolveModalOpen(true); }}
+                                 className="flex items-center justify-center shrink-0 text-xs font-black tracking-widest uppercase bg-amber-500/20 hover:bg-green-500 text-amber-500 hover:text-white px-6 py-2.5 rounded-lg border border-amber-500/40 hover:border-green-500 transition-colors shadow-lg group/btn"
                               >
-                                 <Check className="w-4 h-4 mr-2 group-hover/btn:text-white" /> SỬA CHỮA XONG
+                                 <Check className="w-4 h-4 mr-2 group-hover/btn:text-white" /> NGHIỆM THU ĐÓNG VÉ
                               </button>
                            </div>
                         )}
@@ -313,6 +372,51 @@ export default function Incidents() {
                >
                   <ChevronRight className="w-5 h-5" />
                </button>
+            </div>
+         )}
+
+         {/* COMPONENT LỒNG TRUY CẬP 5: FORM ĐÓNG VÉ KANBAN MODAL */}
+         {resolveModalOpen && (
+            <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+               <div className="absolute inset-0 bg-slate-900/80 backdrop-blur-md" onClick={() => setResolveModalOpen(false)}></div>
+               <div className="glass border border-green-500/40 rounded-2xl p-6 w-full max-w-lg z-10 shadow-2xl relative animate-enter bg-gradient-to-br from-slate-900 to-green-950/30">
+                  <div className="flex items-center mb-6 border-b border-green-500/20 pb-4">
+                     <div className="w-12 h-12 rounded-full bg-green-500/20 flex items-center justify-center mr-4 border border-green-500/40">
+                        <CheckCircle className="w-6 h-6 text-green-400 animate-pulse" />
+                     </div>
+                     <div>
+                        <h2 className="text-xl font-black font-mono tracking-widest text-green-400 uppercase">Khám Nghiệm Sửa Chữa</h2>
+                        <p className="text-xs text-green-500/70 font-bold uppercase mt-1 tracking-widest">Hồ Sơ Đóng Vé Phạt Đỏ #{String(resolvingTicketId).padStart(4, '0')}</p>
+                     </div>
+                  </div>
+                  <div className="space-y-4">
+                     <div>
+                        <label className="block text-xs font-bold text-green-400 uppercase tracking-widest mb-3">NHẬT KÝ KHẮC PHỤC HIỆN TRƯỜNG (RESOLVE NOTE)</label>
+                        <textarea
+                           autoFocus
+                           placeholder="Trình bày giải pháp: Thay Switch, Bọc keo chống chuột, Cắm lại cáp SATA... (Bắt Buộc Nhập)"
+                           className="w-full bg-slate-900/80 border border-green-500/50 rounded-xl px-4 py-3 text-sm text-slate-300 placeholder:text-slate-600 focus:outline-none focus:border-green-400 focus:ring-1 focus:ring-green-400 min-h-[120px] resize-none shadow-inner"
+                           value={resolveNoteText}
+                           onChange={(e) => setResolveNoteText(e.target.value)}
+                        />
+                     </div>
+                     <div className="flex justify-end pt-3 gap-3">
+                        <button
+                           onClick={() => setResolveModalOpen(false)}
+                           className="px-5 py-2 text-green-600/60 font-bold text-xs hover:text-green-500 transition-colors outline-none"
+                        >
+                           RÚT LẠI (HỦY ĐÓNG)
+                        </button>
+                        <button
+                           onClick={() => handleTicketingWorkflow(resolvingTicketId, 'resolved', resolveNoteText)}
+                           disabled={!resolveNoteText.trim()}
+                           className="bg-green-600 hover:bg-green-500 text-white font-black text-xs tracking-widest uppercase px-6 py-2.5 rounded-xl transition-all shadow-[0_0_15px_rgba(34,197,94,0.3)] hover:shadow-[0_0_20px_rgba(34,197,94,0.5)] disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
+                        >
+                           <Check className="w-4 h-4 mr-2" /> CHỐT ĐÓNG VÉ
+                        </button>
+                     </div>
+                  </div>
+               </div>
             </div>
          )}
 

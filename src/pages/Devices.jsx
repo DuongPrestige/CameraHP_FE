@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Plus, Server, Trash2, RefreshCw, AlertCircle, Wifi, Search, Filter, ChevronLeft, ChevronRight, MapPin, Camera } from 'lucide-react';
+import { Plus, Server, Trash2, RefreshCw, AlertCircle, Wifi, Search, Filter, ChevronLeft, ChevronRight, MapPin, Camera, Activity } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { api } from '../services/api';
 import { Link } from 'react-router-dom';
@@ -14,6 +14,7 @@ export default function Devices() {
   // Filter & Pagination States
   const [searchTerm, setSearchTerm] = useState('');
   const [filterLocation, setFilterLocation] = useState('ALL');
+  const [filterHealth, setFilterHealth] = useState('ALL');
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 15;
 
@@ -79,9 +80,22 @@ export default function Devices() {
     return devices.filter(dev => {
       const matchSearch = dev.ip_address?.includes(searchTerm);
       const matchLocation = filterLocation === 'ALL' || String(dev.location_id) === String(filterLocation);
-      return matchSearch && matchLocation;
+      
+      let matchHealth = true;
+      const isOnline = String(dev.status || dev.state || dev.is_online || '').toUpperCase() === 'ONLINE' || dev.status === true || dev.status === 1 || String(dev.status || '').toUpperCase() === 'TRUE';
+      const hasIncidents = dev.incidents && dev.incidents.length > 0;
+
+      if (filterHealth === 'HEALTHY') {
+         matchHealth = isOnline && !hasIncidents;
+      } else if (filterHealth === 'OFFLINE') {
+         matchHealth = !isOnline;
+      } else if (filterHealth === 'WARNING') {
+         matchHealth = isOnline && hasIncidents;
+      }
+
+      return matchSearch && matchLocation && matchHealth;
     });
-  }, [devices, searchTerm, filterLocation]);
+  }, [devices, searchTerm, filterLocation, filterHealth]);
 
   const totalPages = Math.ceil(filteredDevices.length / itemsPerPage) || 1;
 
@@ -124,8 +138,24 @@ export default function Devices() {
           />
         </div>
 
-        <div className="flex w-full md:w-auto gap-4 items-center">
-          <div className="relative w-full md:w-auto flex items-center">
+        <div className="flex w-full md:w-auto gap-4 items-center flex-wrap sm:flex-nowrap">
+          {/* Lọc Sức Khỏe Thiết Bị */}
+          <div className="relative w-full sm:w-auto flex items-center">
+            <Activity className="absolute left-3 w-4 h-4 text-emerald-500 pointer-events-none" />
+            <select
+              value={filterHealth}
+              onChange={(e) => setFilterHealth(e.target.value)}
+              className="bg-slate-900/80 border border-slate-700 rounded-lg pl-9 pr-8 py-2.5 text-sm text-slate-300 focus:outline-none focus:border-emerald-500 appearance-none transition-all hover:bg-slate-800"
+            >
+              <option value="ALL">Mọi Sức Khỏe</option>
+              <option value="HEALTHY">🟢 Hoạt Động Cực Tốt</option>
+              <option value="WARNING">🟡 Lỗi Linh Kiện / Cam Đứt</option>
+              <option value="OFFLINE">🔴 Trạm NVR Offline</option>
+            </select>
+          </div>
+
+          {/* Lọc Vị Trí Lắp Đặt */}
+          <div className="relative w-full sm:w-auto flex items-center">
             <Filter className="absolute left-3 w-4 h-4 text-slate-500 pointer-events-none" />
             <select
               value={filterLocation}
