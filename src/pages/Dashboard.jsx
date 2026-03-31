@@ -61,23 +61,6 @@ export default function Dashboard() {
     setLoading(false);
   };
 
-  // Workflow KTV: Gắp Lỗi Mạng Tại Chỗ
-  const handleUpdateTicketStatus = async (e, incidentId, newStatus) => {
-    e.stopPropagation();
-    try {
-      const body = { status: newStatus.toUpperCase() };
-      if (newStatus === 'resolved') {
-        body.resolve_note = "Xử lý khẩn cấp thông qua Màn Hình Dashboard Tổng Cục.";
-      }
-      await api.put(`/incidents/${incidentId}`, body);
-      toast.success(`Hệ thống Ghi Nhận: Chuyển thẻ phạt #${incidentId} thành ${newStatus.toUpperCase()}`, { icon: newStatus === 'resolved' ? '✅' : '🛠️' });
-
-      fetchIncidents();
-      fetchStats();
-    } catch (error) {
-      toast.error(`Từ Chối Thao Tác: ${error.response?.data?.message || 'Lỗi Máy Chủ'}`, { icon: '❌' });
-    }
-  };
 
   useEffect(() => {
     loadAll();
@@ -283,7 +266,11 @@ export default function Dashboard() {
             ) : (
               <ul className="space-y-3">
                 {videoLossList.map(item => (
-                  <li key={item.id} className="bg-slate-800/50 p-3 rounded-xl border border-amber-500/30 shadow-md relative overflow-hidden">
+                  <li 
+                    key={item.id} 
+                    onClick={() => (item.device?.id || item.device_id) && navigate(`/devices/${item.device?.id || item.device_id}`)}
+                    className="bg-slate-800/50 p-3 rounded-xl border border-amber-500/30 shadow-md relative overflow-hidden cursor-pointer hover:bg-slate-700/50 transition-colors group"
+                  >
                     <div className="absolute left-0 top-0 bottom-0 w-1 bg-amber-500 shadow-[0_0_15px_rgba(245,158,11,0.8)]"></div>
                     <div className="flex justify-between items-start pl-2">
                       <div>
@@ -295,9 +282,6 @@ export default function Dashboard() {
                           {item.device?.ip_address || item.device_id || 'UNKNOWN-IP'}
                         </p>
                       </div>
-                      <button onClick={(e) => handleUpdateTicketStatus(e, item.id, 'processing')} className="bg-amber-500/20 hover:bg-amber-500 hover:text-white text-amber-400 w-8 h-8 rounded-lg flex items-center justify-center transition-colors">
-                        <Play className="w-4 h-4" />
-                      </button>
                     </div>
                   </li>
                 ))}
