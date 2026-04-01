@@ -13,31 +13,64 @@ export default function Devices() {
 
   // Filter & Pagination States
   const [searchTerm, setSearchTerm] = useState('');
+  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('');
   const [filterLocation, setFilterLocation] = useState('ALL');
   const [filterHealth, setFilterHealth] = useState('ALL');
+  
   const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 15;
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalItems, setTotalItems] = useState(0);
+  const itemsPerPage = 10; // Cứng 10 item theo API
 
+  // Debounce ngăn chập mạng khi gõ chữ
   useEffect(() => {
-    fetchData();
-  }, []);
+    const handler = setTimeout(() => {
+      setDebouncedSearchTerm(searchTerm);
+    }, 500);
+    return () => clearTimeout(handler);
+  }, [searchTerm]);
 
   const fetchData = async () => {
     try {
+      setLoading(true);
+      const queryParams = new URLSearchParams({
+        page: currentPage,
+        limit: itemsPerPage
+      });
+      
+      if (debouncedSearchTerm) queryParams.append('search', debouncedSearchTerm);
+      if (filterLocation !== 'ALL') queryParams.append('location_id', filterLocation);
+      if (filterHealth !== 'ALL') queryParams.append('health', filterHealth);
+
       const [devRes, locRes] = await Promise.all([
-        api.get('/devices').catch(() => ({ data: [] })),
+        api.get(`/devices?${queryParams.toString()}`).catch(() => ({ data: { data: [], pagination: {} } })),
         api.get('/locations').catch(() => ({ data: [] }))
       ]);
-      const devicesData = devRes.data?.data || devRes.data || [];
-      console.log('[DEBUG API] Thiết bị NVR lấy về từ Backend:', devicesData);
-      setDevices(devicesData);
+      
+      const payload = devRes.data;
+      const devicesData = payload?.data || payload || [];
+      setDevices(Array.isArray(devicesData) ? devicesData : []);
+      
+      const pg = payload?.pagination || {};
+      setTotalPages(pg.total_pages || 1);
+      setTotalItems(pg.total_items || devicesData.length || 0);
+
       setLocations(locRes.data?.data || locRes.data || []);
     } catch (error) {
-      toast.error('Lỗi lấy dữ liệu NVR');
+      toast.error('Lỗi Lấy Dữ liệu Phân Trang NVR');
     } finally {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    fetchData();
+  }, [currentPage, debouncedSearchTerm, filterLocation, filterHealth]);
+
+  // Reset về page 1 khi bộ lọc nhảy số mới
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [debouncedSearchTerm, filterLocation, filterHealth]);
 
   const handleAddDevice = async (e) => {
     e.preventDefault();
@@ -74,40 +107,6 @@ export default function Devices() {
       toast.error('Đồng bộ Camera thất bại', { id: toastId });
     }
   };
-
-  // --- LOGIC LỌC DỮ LIỆU & PHÂN TRANG (CLIENT-SIDE) ---
-  const filteredDevices = useMemo(() => {
-    return devices.filter(dev => {
-      const matchSearch = dev.ip_address?.includes(searchTerm);
-      const matchLocation = filterLocation === 'ALL' || String(dev.location_id) === String(filterLocation);
-      
-      let matchHealth = true;
-      const isOnline = String(dev.status || dev.state || dev.is_online || '').toUpperCase() === 'ONLINE' || dev.status === true || dev.status === 1 || String(dev.status || '').toUpperCase() === 'TRUE';
-      const hasIncidents = dev.incidents && dev.incidents.length > 0;
-
-      if (filterHealth === 'HEALTHY') {
-         matchHealth = isOnline && !hasIncidents;
-      } else if (filterHealth === 'OFFLINE') {
-         matchHealth = !isOnline;
-      } else if (filterHealth === 'WARNING') {
-         matchHealth = isOnline && hasIncidents;
-      }
-
-      return matchSearch && matchLocation && matchHealth;
-    });
-  }, [devices, searchTerm, filterLocation, filterHealth]);
-
-  const totalPages = Math.ceil(filteredDevices.length / itemsPerPage) || 1;
-
-  // Tránh hiển thị trắng trang khi đang ở trang xa mà đổi Filter
-  useEffect(() => {
-    if (currentPage > totalPages) setCurrentPage(totalPages);
-  }, [totalPages, currentPage]);
-
-  const currentItems = useMemo(() => {
-    const start = (currentPage - 1) * itemsPerPage;
-    return filteredDevices.slice(start, start + itemsPerPage);
-  }, [filteredDevices, currentPage]);
 
   return (
     <div className="text-white flex flex-col h-full animate-fade-in-up">
@@ -193,15 +192,15 @@ export default function Devices() {
                     </div>
                   </td>
                 </tr>
-              ) : filteredDevices.length === 0 ? (
+              ) : devices.length === 0 ? (
                 <tr>
                   <td colSpan="5" className="px-6 py-20 text-center text-slate-500">
                     <Server className="w-12 h-12 mx-auto mb-4 opacity-20" />
-                    Bảng quét radar trống, không có Thiết bị NVR trong vùng mục tiêu.
+                    Bảng Server Backend trả về vùng trống, không có Thiết bị NVR tương ứng.
                   </td>
                 </tr>
               ) : (
-                currentItems.map(device => {
+                devices.map(device => {
                   // Cố gắng bắt mọi loại naming convention backend có thể trả về
                   const statusRaw = device.status || device.state || device.is_online || 'UNKNOWN';
                   const isOnline = String(statusRaw).toUpperCase() === 'ONLINE' || statusRaw === true || statusRaw === 1 || String(statusRaw).toUpperCase() === 'TRUE';
@@ -271,11 +270,11 @@ export default function Devices() {
           </table>
         </div>
 
-        {/* PHÂN TRANG BANEL CHO MOBILE/DESKTOP Ở ĐÁY TABLE */}
+        {/* PHÂN TRANG GIAO DIỆN (SERVER-SIDE) Ở ĐÁY TABLE */}
         {totalPages > 1 && (
           <div className="mt-auto px-6 py-4 bg-slate-900/50 border-t border-slate-700/50 flex flex-col md:flex-row items-center justify-between">
             <span className="text-xs text-slate-400 font-medium mb-4 md:mb-0">
-              NVR System Monitor - Page {currentPage} of {totalPages}
+              Đang xem trang <span className="text-white font-bold">{currentPage}</span> trên Tổng số <span className="text-white font-bold">{totalPages}</span> Trang (Tổng khối lượng NVR: <span className="text-primary font-bold">{totalItems}</span>)
             </span>
             <div className="flex items-center space-x-2">
               <button
