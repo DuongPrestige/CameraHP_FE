@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts';
-import { Server, Camera, AlertTriangle, CheckCircle, ShieldAlert, Cpu, Play, Check, Database, VideoOff } from 'lucide-react';
+import { Server, Camera, AlertTriangle, CheckCircle, ShieldAlert, Cpu, Play, Check, Database, VideoOff, ExternalLink } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../services/api';
 import toast from 'react-hot-toast';
@@ -78,30 +78,6 @@ export default function Dashboard() {
     });
 
     socket.on('new_incident', (payload) => {
-      toast.custom((t) => (
-        <div className={`${t.visible ? 'animate-enter' : 'animate-leave'} max-w-md w-full glass bg-red-500/15 border border-red-500/60 shadow-lg shadow-red-500/30 rounded-xl pointer-events-auto flex ring-1 ring-black ring-opacity-5 relative overflow-hidden backdrop-blur-xl`}>
-          <div className="absolute top-0 right-0 w-32 h-32 bg-red-500/20 rounded-full blur-2xl z-0" />
-          <div className="flex-1 w-0 p-4 relative z-10">
-            <div className="flex items-start">
-              <div className="flex-shrink-0 pt-0.5">
-                <ShieldAlert className="h-10 w-10 text-red-500 shadow-md animate-pulse" />
-              </div>
-              <div className="ml-3 flex-1">
-                <p className="text-sm font-black text-red-400 font-mono tracking-widest uppercase">⚠️ {payload?.detail || 'Còi Báo Động Mới Nhất'}</p>
-                <p className="mt-1 text-sm text-slate-200 font-medium leading-snug">
-                  Sự cố mới vừa cập bến. Bảng lỗi Zero-Latency đang đồng bộ.
-                </p>
-              </div>
-            </div>
-          </div>
-        </div>
-      ), { duration: 8000, id: 'ws_new_incident' });
-
-      try {
-        const beep = new Audio('data:audio/mp3;base64,//NExAAAAANIAAAAAExBTUUzLjEwMKqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq/9JWAAACf/2Q==');
-        beep.play().catch(e => { });
-      } catch (e) { }
-
       fetchStats();
       fetchIncidents();
     });
@@ -112,10 +88,6 @@ export default function Dashboard() {
     });
 
     socket.on('device_status_change', (payload) => {
-      toast.error(`BÁO ĐỘNG ĐỎ: Thiết bị NVR ${payload?.ip || ''} vừa MẤT KẾT NỐI MẠNG!`, {
-        icon: '⚡',
-        style: { background: 'rgba(239, 68, 68, 0.95)', color: '#fff', fontWeight: 'bold' }
-      });
       fetchStats();
     });
 
@@ -233,7 +205,7 @@ export default function Dashboard() {
         {/* Card 5: TICKETS PENDING */}
         <div className={`glass p-5 xl:p-6 rounded-2xl md:col-span-1 xl:col-span-1 flex flex-col justify-between transition-all shadow-lg h-[150px] relative overflow-hidden ${stats.tickets_pending > 0 ? 'border border-rose-500/60 shadow-[0_4px_30px_rgba(244,63,94,0.25)]' : 'border border-slate-700/50'}`}>
           <div className="flex justify-between items-start z-10">
-            <p className={`text-[10px] xl:text-[11px] font-bold tracking-widest uppercase mt-1 ${stats.tickets_pending > 0 ? 'text-rose-300' : 'text-slate-400'}`}>BÁO ĐỘNG (LỖI)</p>
+            <p className={`text-[10px] xl:text-[11px] font-bold tracking-widest uppercase mt-1 ${stats.tickets_pending > 0 ? 'text-rose-300' : 'text-slate-400'}`}>SỰ CỐ CẦN XỬ LÝ</p>
             <div className={`w-10 h-10 xl:w-12 xl:h-12 rounded-xl border flex items-center justify-center transition-transform hover:scale-110 cursor-pointer ${stats.tickets_pending > 0 ? 'bg-rose-500/20 border-rose-500/40 text-rose-500 shadow-inner animate-[spin_3s_linear_infinite]' : 'bg-slate-800/80 border-slate-700 text-slate-500'}`}>
               <AlertTriangle className="w-5 h-5 xl:w-6 xl:h-6" />
             </div>
@@ -334,7 +306,7 @@ export default function Dashboard() {
                 </div>
 
                 <div className="flex-1 overflow-y-auto custom-scrollbar w-full bg-black/30 rounded-xl p-4 border border-red-500/30">
-                  <p className="text-[10px] text-red-400/80 uppercase tracking-widest mb-3 font-bold border-b border-red-500/30 pb-2">Danh Sách Trạm Thiệt Hại (Chuẩn bị SATA Mới):</p>
+                  <p className="text-[10px] text-red-400/80 uppercase tracking-widest mb-3 font-bold border-b border-red-500/30 pb-2">Danh Sách Đầu Ghi Hỏng HDD:</p>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     {badHddList.map(item => {
                       return (
@@ -423,7 +395,12 @@ export default function Dashboard() {
                 const isHdd = incident.error_type?.toUpperCase().includes('HDD') || incident.error_type?.toUpperCase().includes('STORAGE');
 
                 return (
-                  <li key={incident.id || idx} className="group glass bg-slate-800/40 hover:bg-slate-800/80 p-5 rounded-2xl border border-slate-700/50 hover:border-slate-500 transition-all shadow-md relative overflow-hidden flex flex-col justify-between">
+                  <li 
+                    key={incident.id || idx} 
+                    onClick={() => navigate(`/incidents?status=${incident.status}`)}
+                    title="Nhấp để xử lý Sự Cố trên Bảng Điều Phối Kanban"
+                    className="group glass bg-slate-800/40 hover:bg-slate-800/80 p-5 rounded-2xl border border-slate-700/50 hover:border-blue-500/50 transition-all shadow-md relative overflow-hidden flex flex-col justify-between cursor-pointer"
+                  >
                     <div className={`absolute left-0 top-0 bottom-0 w-1.5 ${isPending ? 'bg-red-500 shadow-[0_0_10px_rgba(239,68,68,0.8)]' : 'bg-amber-500'}`}></div>
 
                     <div className="pl-2">
@@ -437,33 +414,18 @@ export default function Dashboard() {
                         </span>
                       </div>
 
-                      <div className="flex items-center mt-3 text-[14px]">
-                        <div className="text-slate-400 font-medium whitespace-nowrap mr-2">IP Thiết bị:</div>
-                        <div className="font-mono font-black text-white bg-black/40 border border-slate-700 px-3 py-1.5 rounded-md tracking-wider flex items-center shadow-inner group-hover:border-primary/50 transition-colors">
-                          <Server className="w-3 h-3 mr-2 opacity-70" />
-                          {incident.device?.ip_address || incident.device_id || 'CHƯA RÕ'}
+                      <div className="flex items-center justify-between mt-3 text-[14px]">
+                        <div className="flex items-center">
+                          <div className="text-slate-400 font-medium whitespace-nowrap mr-2">IP Thiết bị:</div>
+                          <div className="font-mono font-black text-white bg-black/40 border border-slate-700 px-3 py-1.5 rounded-md tracking-wider flex items-center shadow-inner group-hover:border-blue-500/40 transition-colors">
+                            <Server className="w-3 h-3 mr-2 opacity-70 group-hover:text-blue-400" />
+                            {incident.device?.ip_address || incident.device_id || 'CHƯA RÕ'}
+                          </div>
+                        </div>
+                        <div className="flex items-center justify-center bg-blue-500/10 text-blue-400 border border-blue-500/30 rounded-lg px-3 py-1.5 opacity-0 group-hover:opacity-100 transition-all transform translate-x-4 group-hover:translate-x-0">
+                          <span className="text-[10px] font-black tracking-widest uppercase items-center flex">MỞ TICKET <ExternalLink className="w-3 h-3 ml-1.5" /></span>
                         </div>
                       </div>
-                    </div>
-
-                    <div className="mt-5 pt-4 border-t border-slate-700/50">
-                      {isPending ? (
-                        <button
-                          onClick={(e) => handleUpdateTicketStatus(e, incident.id, 'processing')}
-                          className="flex items-center justify-center w-full bg-red-600/20 hover:bg-red-500 font-black text-[11px] text-red-400 hover:text-white uppercase tracking-widest px-4 py-3 rounded-xl border border-red-500/40 transition-all shadow-md active:scale-95"
-                        >
-                          <Play className="w-4 h-4 mr-2" />
-                          XỬ LÝ NGAY
-                        </button>
-                      ) : (
-                        <button
-                          onClick={(e) => handleUpdateTicketStatus(e, incident.id, 'resolved')}
-                          className="flex items-center justify-center w-full bg-amber-500/20 hover:bg-green-500 font-black text-[11px] text-amber-400 hover:text-white uppercase tracking-widest px-4 py-3 rounded-xl border border-amber-500/40 transition-all shadow-md active:scale-95 group/btn"
-                        >
-                          <Check className="w-4 h-4 mr-2 group-hover/btn:text-white" />
-                          ĐÃ XONG
-                        </button>
-                      )}
                     </div>
                   </li>
                 );

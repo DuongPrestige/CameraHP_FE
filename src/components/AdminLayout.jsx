@@ -1,13 +1,86 @@
 import { Outlet, Link, useNavigate, useLocation } from 'react-router-dom';
 import useAuthStore from '../stores/authStore';
-import { Camera, LayoutDashboard, MapPin, AlertTriangle, LogOut, Bell, Server } from 'lucide-react';
+import { Camera, LayoutDashboard, MapPin, AlertTriangle, LogOut, Bell, Server, ShieldAlert } from 'lucide-react';
 import { cn } from '../utils/cn';
+import { useEffect } from 'react';
+import { io } from 'socket.io-client';
+import toast from 'react-hot-toast';
 
 export default function AdminLayout() {
   const logout = useAuthStore((state) => state.logout);
   const user = useAuthStore((state) => state.user);
   const navigate = useNavigate();
   const location = useLocation();
+
+  // ----- GIAO THỨC ALARM TOÀN CỤC (GLOBAL SOCKET NOTIFICATIONS) -----
+  useEffect(() => {
+    if (!user) return; // Chỉ active ổ cắm khi đã login
+
+    const socketUrl = import.meta.env.VITE_API_URL?.replace('/api', '') || 'http://localhost:5000';
+    const socket = io(socketUrl, {
+      auth: { token: localStorage.getItem('token') || '' },
+      transports: ['websocket', 'polling']
+    });
+
+    socket.on('new_incident', (payload) => {
+      // 1. Phóng Màn Hình Đỏ Xuyên Không
+      toast.custom((t) => (
+        <div 
+          onClick={() => {
+            toast.dismiss(t.id);
+            navigate('/dashboard');
+          }}
+          className={`${t.visible ? 'animate-enter' : 'animate-leave'} cursor-pointer hover:shadow-[0_0_30px_rgba(239,68,68,0.5)] transition-shadow max-w-md w-full glass bg-red-500/15 border border-red-500/60 shadow-lg shadow-red-500/30 rounded-xl pointer-events-auto flex ring-1 ring-black ring-opacity-5 relative overflow-hidden backdrop-blur-xl`}
+        >
+          <div className="absolute top-0 right-0 w-32 h-32 bg-red-500/20 rounded-full blur-2xl z-0" />
+          <div className="flex-1 w-0 p-4 relative z-10">
+            <div className="flex items-start">
+              <div className="flex-shrink-0 pt-0.5">
+                <ShieldAlert className="h-10 w-10 text-red-500 shadow-md animate-pulse" />
+              </div>
+              <div className="ml-3 flex-1">
+                <p className="text-sm font-black text-red-400 font-mono tracking-widest uppercase">⚠️ {payload?.detail || 'Còi Báo Động Mới Nhất'}</p>
+                <p className="mt-1 text-sm text-slate-200 font-medium leading-snug">
+                  Hệ thống ghi nhận Sự cố Rớt Mạng / Ngoại Tuyến mới. Vui lòng kiểm tra Bảng Radar Chống Nhiễu!
+                </p>
+                <p className="text-[10px] text-red-300 font-mono mt-2 flex items-center gap-1 opacity-80"><AlertTriangle className="w-3 h-3" /> CLICK HERE TO VIEW RADAR</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      ), { duration: 8000, id: 'global_ws_new_incident' });
+
+      // 2. Kích Hoạt Loa Báo
+      try {
+        const beep = new Audio('data:audio/mp3;base64,//NExAAAAANIAAAAAExBTUUzLjEwMKqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq/9JWAAACf/2Q==');
+        beep.play().catch(e => { });
+      } catch (e) { }
+    });
+
+    socket.on('device_status_change', (payload) => {
+      toast.error(
+        <div 
+          onClick={() => {
+            toast.dismiss('global_ws_device_offline');
+            navigate('/dashboard');
+          }}
+          className="cursor-pointer"
+        >
+          BÁO ĐỘNG ĐỎ: Trạm NVR {payload?.ip || ''} MẤT KẾT NỐI TỔNG! <br/>
+          <span className="text-xs opacity-80 decoration-solid underline mt-1 block">Click về Dashboard để xem Radar</span>
+        </div>, 
+      {
+        icon: '⚡',
+        style: { background: 'rgba(239, 68, 68, 0.95)', color: '#fff', fontWeight: 'bold' },
+        id: 'global_ws_device_offline'
+      });
+    });
+
+    return () => {
+      socket.disconnect();
+    };
+  }, [user]);
+  // -------------------------------------------------------------
 
   const handleLogout = () => {
     logout();

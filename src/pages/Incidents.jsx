@@ -20,13 +20,13 @@ export default function Incidents() {
    // Pagination & Filters
    const [page, setPage] = useState(1);
    const [totalPages, setTotalPages] = useState(1);
-   
+
    // Đọc Trạng Thái Status Từ Đường Dẫn URL (Mặc định PENDING)
    const [statusFilter, setStatusFilter] = useState(() => {
-     const params = new URLSearchParams(window.location.search);
-     return params.get('status') || 'pending';
+      const params = new URLSearchParams(window.location.search);
+      return params.get('status') || 'pending';
    });
-   
+
    const [tabCounts, setTabCounts] = useState({ pending: 0, processing: 0, resolved: 0 });
 
    // Trạng thái Form Đóng Vé (Modal Resolve Kanban)
@@ -108,8 +108,8 @@ export default function Incidents() {
 
       socket.on('incident_updated', (payload) => {
          if (payload?.message) {
-            toast.success(payload.message, { 
-               duration: 6000, 
+            toast.success(payload.message, {
+               duration: 6000,
                position: 'bottom-right',
                icon: '🤖',
                style: {
@@ -222,16 +222,16 @@ export default function Incidents() {
                {/* Bộ Lọc (Jira Filters -> Kanban Tabs) */}
                <div className="flex bg-slate-900/80 p-1.5 rounded-xl border border-slate-700 shadow-inner overflow-x-auto custom-scrollbar">
                   <button onClick={() => { setStatusFilter('pending'); setPage(1); }} className={`relative px-5 py-2.5 flex items-center justify-center rounded-lg text-xs font-black tracking-widest uppercase transition-all whitespace-nowrap ${statusFilter === 'pending' ? 'bg-red-500/20 text-red-500 border border-red-500/50 shadow-[0_0_15px_rgba(239,68,68,0.2)]' : 'text-slate-500 hover:text-red-400 hover:bg-red-500/10'}`}>
-                    🔥 PENDING
-                    {tabCounts.pending > 0 && <span className="ml-2 bg-red-500 text-white text-[10px] px-2 py-0.5 rounded-full">{tabCounts.pending}</span>}
+                     🔥 PENDING
+                     {tabCounts.pending > 0 && <span className="ml-2 bg-red-500 text-white text-[10px] px-2 py-0.5 rounded-full">{tabCounts.pending}</span>}
                   </button>
                   <button onClick={() => { setStatusFilter('processing'); setPage(1); }} className={`relative px-5 py-2.5 flex items-center justify-center rounded-lg text-xs font-black tracking-widest uppercase transition-all whitespace-nowrap mx-1 ${statusFilter === 'processing' ? 'bg-amber-500/20 text-amber-500 border border-amber-500/50 shadow-[0_0_15px_rgba(245,158,11,0.2)]' : 'text-slate-500 hover:text-amber-400 hover:bg-amber-500/10'}`}>
-                    🛠 PROCESSING
-                    {tabCounts.processing > 0 && <span className="ml-2 bg-amber-500 text-white text-[10px] px-2 py-0.5 rounded-full">{tabCounts.processing}</span>}
+                     🛠 PROCESSING
+                     {tabCounts.processing > 0 && <span className="ml-2 bg-amber-500 text-white text-[10px] px-2 py-0.5 rounded-full">{tabCounts.processing}</span>}
                   </button>
                   <button onClick={() => { setStatusFilter('resolved'); setPage(1); }} className={`relative px-5 py-2.5 flex items-center justify-center rounded-lg text-xs font-black tracking-widest uppercase transition-all whitespace-nowrap ${statusFilter === 'resolved' ? 'bg-green-500/20 text-green-500 border border-green-500/50 shadow-[0_0_15px_rgba(34,197,94,0.2)]' : 'text-slate-500 hover:text-green-400 hover:bg-green-500/10'}`}>
-                    ✅ RESOLVED
-                    {tabCounts.resolved > 0 && <span className="ml-2 bg-green-500 text-white text-[10px] px-2 py-0.5 rounded-full">{tabCounts.resolved}</span>}
+                     ✅ RESOLVED
+                     {tabCounts.resolved > 0 && <span className="ml-2 bg-green-500 text-white text-[10px] px-2 py-0.5 rounded-full">{tabCounts.resolved}</span>}
                   </button>
                </div>
 
@@ -291,11 +291,11 @@ export default function Incidents() {
                               <div className="flex items-start">
                                  <Server className="w-4 h-4 text-slate-500 mr-3 mt-0.5" />
                                  <div className="text-sm text-slate-300 flex-1">
-                                    <p className="text-[11px] font-bold text-slate-500 uppercase">Trạm Tòa Nhà Điều Phối</p>
+                                    <p className="text-[11px] font-bold text-slate-500 uppercase">Đầu Ghi</p>
                                     <div className="flex items-center justify-between mt-0.5 gap-2">
                                        <p className="font-mono font-black">{ticket.device?.ip_address || `Thiết bị IP Bí Ẩn (ID: ${ticket.device_id})`}</p>
-                                       <button 
-                                          onClick={() => navigate(`/devices/${ticket.device_id || ticket.device?.id}`)} 
+                                       <button
+                                          onClick={() => navigate(`/devices/${ticket.device_id || ticket.device?.id}`)}
                                           className="flex items-center text-[10px] bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 px-3 py-1.5 rounded-lg border border-blue-500/30 transition-all font-bold tracking-widest shrink-0"
                                        >
                                           <ExternalLink className="w-3 h-3 justify-center mr-1.5" /> MỞ MÁY CHỦ

@@ -16,7 +16,7 @@ export default function Devices() {
   const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('');
   const [filterLocation, setFilterLocation] = useState('ALL');
   const [filterHealth, setFilterHealth] = useState('ALL');
-  
+
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [totalItems, setTotalItems] = useState(0);
@@ -37,7 +37,7 @@ export default function Devices() {
         page: currentPage,
         limit: itemsPerPage
       });
-      
+
       if (debouncedSearchTerm) queryParams.append('search', debouncedSearchTerm);
       if (filterLocation !== 'ALL') queryParams.append('location_id', filterLocation);
       if (filterHealth !== 'ALL') queryParams.append('health', filterHealth);
@@ -46,11 +46,11 @@ export default function Devices() {
         api.get(`/devices?${queryParams.toString()}`).catch(() => ({ data: { data: [], pagination: {} } })),
         api.get('/locations').catch(() => ({ data: [] }))
       ]);
-      
+
       const payload = devRes.data;
       const devicesData = payload?.data || payload || [];
       setDevices(Array.isArray(devicesData) ? devicesData : []);
-      
+
       const pg = payload?.pagination || {};
       setTotalPages(pg.total_pages || 1);
       setTotalItems(pg.total_items || devicesData.length || 0);
@@ -206,7 +206,7 @@ export default function Devices() {
                   const isOnline = String(statusRaw).toUpperCase() === 'ONLINE' || statusRaw === true || statusRaw === 1 || String(statusRaw).toUpperCase() === 'TRUE';
 
                   // Tích hợp Thuật Toán Kiểm Tra Nhân Phẩm Máy dựa theo Dữ Liệu Lỗi Đính Kèm Của Backend
-                  let healthText = 'KHỎE NHƯ TRÂU';
+                  let healthText = 'ỔN ĐỊNH';
                   let healthColor = 'text-green-400';
                   let dotColor = 'bg-green-500 ring-green-500/20 border border-green-400/50';
 
