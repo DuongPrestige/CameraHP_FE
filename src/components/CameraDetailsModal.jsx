@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { X, Camera, MapPin, Server, Activity, AlertCircle, Clock, CheckCircle, AlertTriangle, ChevronRight, Hash } from 'lucide-react';
 import { api } from '../services/api';
 
@@ -8,6 +9,12 @@ export default function CameraDetailsModal({ cameraId, initialData, onClose }) {
 
   const [loadingCam, setLoadingCam] = useState(!initialData);
   const [loadingIncidents, setLoadingIncidents] = useState(true);
+
+  // Core Live View States
+  const [streamName, setStreamName] = useState(null);
+  const [streamUrls, setStreamUrls] = useState(null);
+  const [streamLoading, setStreamLoading] = useState(false);
+  const [streamMode, setStreamMode] = useState('main'); // main or sub
 
   useEffect(() => {
     if (!cameraId) return;
@@ -26,14 +33,53 @@ export default function CameraDetailsModal({ cameraId, initialData, onClose }) {
 
   }, [cameraId]);
 
-  if (!cameraId) return null;
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => {
+    setMounted(true);
+    return () => setMounted(false);
+  }, []);
+
+  if (!cameraId || !mounted) return null;
 
   const currentCam = camera || initialData;
   const statusRaw = currentCam?.status || currentCam?.state || 'UNKNOWN';
   const isOnline = String(statusRaw).toUpperCase() === 'ONLINE' || statusRaw === true || statusRaw === 1 || String(statusRaw).toUpperCase() === 'TRUE';
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm animate-fade-in-up px-4">
+  useEffect(() => {
+    let isMounted = true;
+    let activeStream = null;
+
+    if (isOnline && currentCam?.device_id && currentCam?.channel_number) {
+       setStreamLoading(true);
+       api.post('/live/play', { 
+         deviceId: currentCam.device_id, 
+         channelId: currentCam.channel_number,
+         streamType: streamMode 
+       }).then(res => {
+          if (res.data?.streamName && isMounted) {
+             setStreamName(res.data.streamName);
+             if (res.data.urls) setStreamUrls(res.data.urls);
+             activeStream = res.data.streamName;
+          } else if (res.data?.streamName) {
+             api.delete(`/live/stop?streamName=${res.data.streamName}`).catch(()=>{});
+          }
+       }).catch(err => {
+          console.error("Lỗi triệu hồi Luồng Modal:", err);
+       }).finally(() => {
+         if (isMounted) setStreamLoading(false);
+       });
+    }
+
+    return () => {
+      isMounted = false;
+      if (activeStream) {
+        api.delete(`/live/stop?streamName=${activeStream}`).catch(() => {});
+      }
+    };
+  }, [currentCam?.device_id, currentCam?.channel_number, isOnline, streamMode]);
+
+  const modalContent = (
+    <div className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/70 backdrop-blur-sm animate-fade-in-up px-4">
       <div className="glass w-full max-w-2xl max-h-[90vh] overflow-hidden p-0 rounded-2xl border border-slate-700 shadow-2xl relative flex flex-col">
         <button 
           onClick={onClose} 
@@ -42,9 +88,9 @@ export default function CameraDetailsModal({ cameraId, initialData, onClose }) {
           <X className="w-5 h-5" />
         </button>
 
-        {/* TOP COVER: MÔ PHỎNG CAMERA LENS */}
-        <div className="h-48 relative bg-slate-900 border-b border-primary/20 flex flex-col items-center justify-center overflow-hidden shrink-0">
-          <div className="absolute inset-0 bg-gradient-to-t from-slate-900 via-transparent to-transparent z-10"></div>
+        {/* TOP COVER: MÔ PHỎNG CAMERA LENS Hoặc LIVE STREAM */}
+        <div className="relative aspect-video bg-[#050510] border-b border-primary/20 flex flex-col items-center justify-center overflow-hidden shrink-0 group/vid">
+          <div className="absolute inset-x-0 top-0 h-1/4 bg-gradient-to-b from-black/80 to-transparent z-10 pointer-events-none"></div>
           
           <div className={`absolute top-4 left-4 z-20 flex items-center px-3 py-1.5 rounded-lg border backdrop-blur-md shadow-lg
             ${isOnline ? 'bg-green-500/20 border-green-500/30' : 'bg-red-500/20 border-red-500/30'}`}>
@@ -54,9 +100,47 @@ export default function CameraDetailsModal({ cameraId, initialData, onClose }) {
              </span>
           </div>
 
-          <Camera className="w-24 h-24 text-slate-800 opacity-60 z-0 drop-shadow-2xl" />
-          <div className="absolute inset-x-0 bottom-4 z-20 flex justify-center">
-             <span className="bg-black/80 px-4 py-1.5 rounded-full border border-slate-800 text-xs font-mono font-bold text-slate-300 shadow-[0_4px_15px_rgba(0,0,0,0.5)]">
+          {streamName ? (
+            <>
+              <iframe
+                src={streamMode === 'sub' && streamUrls?.mse ? streamUrls.mse : `http://localhost:1984/stream.html?src=${streamName}&mode=webrtc,mse,mp4`}
+                className="w-full h-full border-0 absolute top-0 left-0 z-0 animate-in fade-in duration-500"
+                allow="autoplay; fullscreen"
+                muted={true}
+              />
+              <div className="absolute top-4 right-14 z-20 opacity-0 group-hover/vid:opacity-100 transition-opacity">
+                <button
+                  onClick={(e) => { 
+                    e.stopPropagation(); 
+                    setStreamMode(prev => prev === 'main' ? 'sub' : 'main'); 
+                  }}
+                  className={`px-3 py-1.5 rounded-lg border text-[10px] font-bold tracking-wider transition-all shadow-xl backdrop-blur-md ${streamMode === 'sub' ? 'bg-orange-600/90 text-white border-orange-400' : 'bg-blue-600/80 text-white border-blue-400 hover:bg-blue-500'}`}
+                  title="Bấm để Đổi Giao Lõi Đầu Thu Từ Main Stream sang Sub Stream"
+                >
+                  {streamMode === 'sub' ? 'SUB STREAM (MƯỢT)' : 'MAIN STREAM (HD)'}
+                </button>
+              </div>
+            </>
+          ) : streamLoading ? (
+            <div className="flex flex-col items-center opacity-80 z-10">
+              <div className="w-12 h-12 mb-4 border-4 border-primary border-t-transparent rounded-full animate-spin shadow-[0_0_20px_rgba(6,182,212,0.6)]"></div>
+              <span className="text-[11px] text-primary tracking-[0.3em] font-mono font-black uppercase shadow-black drop-shadow-md bg-black/60 px-5 py-2 border border-primary/20 rounded-full backdrop-blur-md animate-pulse">
+                 Connecting...
+              </span>
+            </div>
+          ) : (
+            <>
+              <Camera className="w-24 h-24 text-slate-800 opacity-60 z-0 drop-shadow-2xl" />
+              {!isOnline && (
+                <div className="absolute flex flex-col items-center mt-10">
+                  <span className="text-[11px] text-red-500 tracking-[0.3em] font-mono font-black uppercase bg-black/50 px-4 py-2 rounded-full border border-red-500/20">Camera Offline</span>
+                </div>
+              )}
+            </>
+          )}
+
+          <div className="absolute inset-x-0 bottom-3 z-20 flex justify-center pointer-events-none">
+             <span className="bg-black/80 px-4 py-1.5 rounded-full border border-slate-800 text-[10px] font-mono font-black text-slate-400 tracking-widest shadow-[0_4px_15px_rgba(0,0,0,0.5)]">
                CHANNEL ID: <span className="text-primary ml-1">{currentCam?.channel_number || '00'}</span>
              </span>
           </div>
@@ -136,9 +220,10 @@ export default function CameraDetailsModal({ cameraId, initialData, onClose }) {
                  )}
               </div>
            </div>
-
         </div>
       </div>
     </div>
   );
+
+  return createPortal(modalContent, document.body);
 }

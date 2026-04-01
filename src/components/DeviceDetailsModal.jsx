@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { X, Server, HardDrive, Cpu, Activity, AlertCircle, Clock, BadgeInfo, Settings, ChevronRight, Camera, AlertTriangle, CheckCircle } from 'lucide-react';
 import { api } from '../services/api';
 
@@ -79,17 +80,22 @@ export default function DeviceDetailsModal({ deviceId, initialData, onClose }) {
 
   }, [deviceId]);
 
-  if (!deviceId) return null;
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => {
+    setMounted(true);
+    return () => setMounted(false);
+  }, []);
+
+  if (!deviceId || !mounted) return null;
 
   const currentDevice = device || initialData;
   const statusRaw = currentDevice?.status || currentDevice?.state || currentDevice?.is_online || 'UNKNOWN';
   const isOnline = String(statusRaw).toUpperCase() === 'ONLINE' || statusRaw === true || statusRaw === 1 || String(statusRaw).toUpperCase() === 'TRUE';
 
-  // Chống lỗi nếu dev backend trả mảng hoặc object
   const hddList = Array.isArray(hddData) ? hddData : (hddData?.list || hddData?.disks || []);
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-md animate-fade-in-up px-4">
+  const modalContent = (
+    <div className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/60 backdrop-blur-md animate-fade-in-up px-4">
       <div className="glass w-full max-w-5xl max-h-[90vh] overflow-y-auto p-6 lg:p-8 rounded-2xl border border-slate-700 shadow-2xl relative custom-scrollbar flex flex-col">
         <button 
           onClick={onClose} 
@@ -367,4 +373,6 @@ export default function DeviceDetailsModal({ deviceId, initialData, onClose }) {
       </div>
     </div>
   );
+
+  return createPortal(modalContent, document.body);
 }
