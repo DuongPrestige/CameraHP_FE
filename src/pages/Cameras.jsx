@@ -20,7 +20,7 @@ export default function Cameras() {
   const [filterStatus, setFilterStatus] = useState('ALL'); // ALL, ONLINE, OFFLINE
   const [filterLocation, setFilterLocation] = useState('ALL');
   const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 24;
+  const itemsPerPage = 9; // Giảm xuống 9 giống Lưới NVR để đảm bảo Phân trang luôn được render
 
   useEffect(() => {
     fetchData();
@@ -256,8 +256,7 @@ export default function Cameras() {
       </div>
 
       {/* BỘ ĐIỀU KHIỂN PHÂN TRANG (PAGINATION) QUÁ ĐẸP */}
-      {totalPages > 1 && (
-         <div className="mt-8 flex items-center justify-between glass p-3 rounded-xl border border-slate-700/50">
+      <div className="mt-8 flex items-center justify-between glass p-3 rounded-xl border border-slate-700/50">
             <button 
               onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
               disabled={currentPage === 1}
@@ -288,7 +287,6 @@ export default function Cameras() {
               Trang Kế <ChevronRight className="w-4 h-4 ml-1" />
             </button>
          </div>
-      )}
 
       {/* MODAL ISAPI ASYNC: View Tech Details */}
       <CameraDetailsModal 

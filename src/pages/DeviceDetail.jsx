@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { ArrowLeft, Server, HardDrive, Cpu, Activity, AlertCircle, Clock, BadgeInfo, Camera as CameraIcon, AlertTriangle, CheckCircle, Info, EthernetPort, Plug, RefreshCw, Search } from 'lucide-react';
+import { ArrowLeft, Server, HardDrive, Cpu, Activity, AlertCircle, Clock, BadgeInfo, Camera as CameraIcon, AlertTriangle, CheckCircle, Info, EthernetPort, Plug, RefreshCw, Search, ChevronRight, ChevronLeft, LayoutGrid } from 'lucide-react';
 import { api } from '../services/api';
 import toast from 'react-hot-toast';
 import { io } from 'socket.io-client';
 import CameraDetailsModal from '../components/CameraDetailsModal';
+import HoverCameraCard from '../components/HoverCameraCard';
 
 // Circle Progress Component Mini
 const CircularProgress = ({ percentage, colorClass, label }) => {
@@ -53,6 +54,7 @@ export default function DeviceDetail() {
 
   // Focus Modal Mắt Thần
   const [selectedCamera, setSelectedCamera] = useState(null);
+  const [cameraPage, setCameraPage] = useState(1);
 
   // Nút Khám Bệnh Nhanh Lazy Healing
   const [isHealthChecking, setIsHealthChecking] = useState(false);
@@ -191,6 +193,14 @@ export default function DeviceDetail() {
   const statusRaw = device?.status || device?.state || device?.is_online || 'UNKNOWN';
   const isOnline = String(statusRaw).toUpperCase() === 'ONLINE' || statusRaw === true || statusRaw === 1 || String(statusRaw).toUpperCase() === 'TRUE';
   const hddList = Array.isArray(hddData) ? hddData : (hddData?.list || hddData?.disks || []);
+
+  const CAMERAS_PER_PAGE = 9;
+  const totalCameras = device?.cameras?.length || 0;
+  const totalPages = Math.ceil(totalCameras / CAMERAS_PER_PAGE);
+  const currentCameras = device?.cameras?.slice(
+    (cameraPage - 1) * CAMERAS_PER_PAGE,
+    cameraPage * CAMERAS_PER_PAGE
+  ) || [];
 
   return (
     <div className="text-white flex flex-col h-full animate-fade-in-up space-y-6">
@@ -480,66 +490,56 @@ export default function DeviceDetail() {
           </div>
         </div>
 
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm text-slate-300">
-            <thead className="bg-slate-800/80 text-slate-400 uppercase font-bold text-[10px] tracking-widest border-b border-slate-700/80 backdrop-blur-md">
-              <tr>
-                <th className="px-5 py-4 w-[10%]">Sóng Bắt</th>
-                <th className="px-5 py-4 w-[15%]">Kênh Truyền</th>
-                <th className="px-5 py-4 w-[35%]">Bí Danh Kỹ Thuật (Alias)</th>
-                <th className="px-5 py-4 w-[25%] font-mono">D.C. IP/Giao Thức</th>
-                <th className="px-5 py-4 text-right w-[15%]">Lệnh Điều Tra</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-700/50">
-              {!device?.cameras || device.cameras.length === 0 ? (
-                <tr>
-                  <td colSpan="5" className="px-5 py-16 text-center">
-                    <Plug className="w-10 h-10 text-slate-600 mx-auto mb-3" />
-                    <p className="text-slate-500 font-medium">Trạm thu Này Rắn Rỏi Đơn Độc. Chưa cắm mắt cam nào.</p>
-                  </td>
-                </tr>
-              ) : (
-                device.cameras.map((cam, idx) => {
+        <div className="w-full">
+          {!device?.cameras || device.cameras.length === 0 ? (
+            <div className="px-5 py-16 text-center border rounded-xl border-slate-700/50 bg-slate-800/20">
+              <Plug className="w-10 h-10 text-slate-600 mx-auto mb-3" />
+              <p className="text-slate-500 font-medium">Trạm thu Này Rắn Rỏi Đơn Độc. Chưa cắm mắt cam nào.</p>
+            </div>
+          ) : (
+            <>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+                {currentCameras.map((cam, idx) => {
                   const camStatus = cam.status || cam.state || cam.is_online || 'UNKNOWN';
                   const isCamOnline = String(camStatus).toUpperCase() === 'ONLINE' || camStatus === true || camStatus === 1 || String(camStatus).toUpperCase() === 'TRUE';
-                  const displayCamStatus = typeof camStatus === 'string' ? camStatus.toUpperCase() : (isCamOnline ? 'ONLINE' : 'OFFLINE');
 
                   return (
-                    <tr key={cam.id || idx} className="hover:bg-slate-800/40 transition-colors group">
-                      <td className="px-5 py-4">
-                        <div className="flex items-center space-x-1.5 w-max">
-                          <span className={`w-2 h-2 rounded-full ${isCamOnline ? 'bg-green-500 animate-pulse ring-2 ring-green-500/20' : 'bg-red-500'}`}></span>
-                          <span className={`font-black text-[9px] tracking-widest uppercase ${isCamOnline ? 'text-green-500' : 'text-red-500/80'}`}>
-                            {isCamOnline ? 'LIVE' : 'NO SGN'}
-                          </span>
-                        </div>
-                      </td>
-                      <td className="px-5 py-4 font-mono text-xs font-bold text-slate-400">
-                        CH_{String(cam.channel_number || idx + 1).padStart(2, '0')}
-                      </td>
-                      <td className="px-5 py-4 font-bold text-white group-hover:text-primary transition-colors">
-                        {cam.name || 'Góc Khuất Chưa Tên'}
-                      </td>
-                      <td className="px-5 py-4 font-mono text-xs text-slate-500 flex items-center mt-0.5">
-                        <EthernetPort className="w-3.5 h-3.5 mr-2 opacity-50" />
-                        {cam.ip_address || "192.168.1.xxx"}
-                      </td>
-                      <td className="px-5 py-4 text-right">
-                        <button
-                          onClick={() => setSelectedCamera(cam)}
-                          className="text-primary hover:text-white bg-primary/10 hover:bg-primary/80 px-3 py-1.5 rounded text-xs font-bold tracking-widest transition-all shadow-sm"
-                          title="Thẩm Vấn Mắt Kính"
-                        >
-                          DETAILS
-                        </button>
-                      </td>
-                    </tr>
+                    <HoverCameraCard
+                      key={cam.id || idx}
+                      cam={cam}
+                      deviceId={id}
+                      onClick={() => setSelectedCamera(cam)}
+                    />
                   );
-                })
+                })}
+              </div>
+
+              {/* Pagination Controls */}
+              {totalPages > 1 && (
+                <div className="flex justify-center items-center mt-8 space-x-4">
+                  <button 
+                    onClick={() => setCameraPage(p => Math.max(1, p - 1))}
+                    disabled={cameraPage === 1}
+                    className="p-2.5 rounded-xl border border-slate-700 bg-slate-800 text-slate-400 hover:text-white hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-md group"
+                    title="Trang Trước"
+                  >
+                    <ChevronLeft className="w-4 h-4 group-hover:-translate-x-0.5 transition-transform" />
+                  </button>
+                  <span className="text-xs font-bold font-mono text-slate-300 bg-slate-900/80 px-4 py-2 rounded-xl border border-slate-700 shadow-inner flex items-center">
+                    Trang <span className="text-primary ml-1 mr-1">{cameraPage}</span> / {totalPages}
+                  </span>
+                  <button 
+                    onClick={() => setCameraPage(p => Math.min(totalPages, p + 1))}
+                    disabled={cameraPage === totalPages}
+                    className="p-2.5 rounded-xl border border-slate-700 bg-slate-800 text-slate-400 hover:text-white hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-md group"
+                    title="Trang Sau"
+                  >
+                    <ChevronRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
+                  </button>
+                </div>
               )}
-            </tbody>
-          </table>
+            </>
+          )}
         </div>
       </div>
 

@@ -16,16 +16,17 @@ export default function CameraDetailsModal({ cameraId, initialData, onClose }) {
   const [streamLoading, setStreamLoading] = useState(false);
   const [streamMode, setStreamMode] = useState('main'); // main or sub
 
+  // Focus Fetch
   useEffect(() => {
     if (!cameraId) return;
 
-    // 1. Lấy thông tin Lõi MySQL Camera
+    // 1. Core MySQL Data
     api.get(`/cameras/${cameraId}`)
       .then(res => setCamera(res.data?.data || res.data))
       .catch(console.error)
       .finally(() => setLoadingCam(false));
 
-    // 2. Lấy danh sách Sự Cố Quá Khứ MySQL
+    // 2. Incident Log
     api.get(`/incidents?camera_id=${cameraId}`)
       .then(res => setIncidents(res.data?.data || res.data || []))
       .catch(() => setIncidents([]))
@@ -39,8 +40,6 @@ export default function CameraDetailsModal({ cameraId, initialData, onClose }) {
     return () => setMounted(false);
   }, []);
 
-  if (!cameraId || !mounted) return null;
-
   const currentCam = camera || initialData;
   const statusRaw = currentCam?.status || currentCam?.state || 'UNKNOWN';
   const isOnline = String(statusRaw).toUpperCase() === 'ONLINE' || statusRaw === true || statusRaw === 1 || String(statusRaw).toUpperCase() === 'TRUE';
@@ -49,7 +48,8 @@ export default function CameraDetailsModal({ cameraId, initialData, onClose }) {
     let isMounted = true;
     let activeStream = null;
 
-    if (isOnline && currentCam?.device_id && currentCam?.channel_number) {
+    // Chỉ kết nối khi có ID và Modal đang được mở hiển thị (mounted)
+    if (mounted && cameraId && isOnline && currentCam?.device_id && currentCam?.channel_number) {
        setStreamLoading(true);
        api.post('/live/play', { 
          deviceId: currentCam.device_id, 
@@ -61,7 +61,7 @@ export default function CameraDetailsModal({ cameraId, initialData, onClose }) {
              if (res.data.urls) setStreamUrls(res.data.urls);
              activeStream = res.data.streamName;
           } else if (res.data?.streamName) {
-             api.delete(`/live/stop?streamName=${res.data.streamName}`).catch(()=>{});
+             api.delete('/live/stop?streamName=' + res.data.streamName).catch(()=>{});
           }
        }).catch(err => {
           console.error("Lỗi triệu hồi Luồng Modal:", err);
@@ -73,10 +73,12 @@ export default function CameraDetailsModal({ cameraId, initialData, onClose }) {
     return () => {
       isMounted = false;
       if (activeStream) {
-        api.delete(`/live/stop?streamName=${activeStream}`).catch(() => {});
+        api.delete('/live/stop?streamName=' + activeStream).catch(() => {});
       }
     };
-  }, [currentCam?.device_id, currentCam?.channel_number, isOnline, streamMode]);
+  }, [currentCam?.device_id, currentCam?.channel_number, isOnline, streamMode, mounted, cameraId]);
+
+  if (!cameraId || !mounted) return null;
 
   const modalContent = (
     <div className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/70 backdrop-blur-sm animate-fade-in-up px-4">
